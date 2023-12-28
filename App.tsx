@@ -5,10 +5,9 @@
  * @format
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
-  StyleSheet,
   useColorScheme,
   View,
 } from 'react-native';
@@ -17,15 +16,14 @@ import {
   Colors,
 } from 'react-native/Libraries/NewAppScreen';
 
-import {enableLatestRenderer} from 'react-native-maps';
+import {enableLatestRenderer, LatLng} from 'react-native-maps';
 import MapView, {Marker} from 'react-native-maps';
 
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+import Geolocation from '@react-native-community/geolocation';
 
+enableLatestRenderer().then(console.log);
 
-request(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION).then((result) => {
-  console.log({result})
-});
 
 check(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION)
   .then((result) => {
@@ -51,10 +49,16 @@ check(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION)
     console.log({error})
   });
 
-enableLatestRenderer().then(console.log);
 
+
+type PermissionStatus = 'unavailable' | 'denied' | 'limited' | 'granted' | 'blocked';
 
 function App(): React.JSX.Element {
+  const [locationStatus, setLocationStatus] = useState<PermissionStatus>('limited')
+  const [myLatLng, setMyLatLng] = useState<LatLng>({
+    latitude: 37.78825,
+    longitude: -122.4324,
+  })
   const isDarkMode = useColorScheme() === 'dark';
 
   const backgroundStyle = {
@@ -62,47 +66,55 @@ function App(): React.JSX.Element {
     flex: 1,
   };
 
+  useEffect(() => {
+    request(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION).then((result) => {
+      console.log({result})
+      setLocationStatus(result)
+    });
+    Geolocation.setRNConfiguration(
+      {
+        skipPermissionRequests: false,
+        enableBackgroundLocationUpdates: true,
+        locationProvider: 'playServices' 
+      }
+    )
+  }, [])
+
+  useEffect(() => {
+    if (locationStatus === 'granted') {
+      Geolocation.getCurrentPosition(info => {
+        console.log({info})
+        setMyLatLng({longitude: info.coords.longitude, latitude: info.coords.latitude})
+      },
+        (error) => {
+          console.log(error);
+        },
+        { enableHighAccuracy: true },
+      );
+    }
+  }, [locationStatus])
+
   return (
     <View style={backgroundStyle}>
-       <MapView
-         initialRegion={{
-           latitude: 37.78825,
-           longitude: -122.4324,
-           latitudeDelta: 0.0922,
-           longitudeDelta: 0.0421,
-         }}
+      <MapView
+        region={{
+          latitude: myLatLng.latitude,
+          longitude: myLatLng.longitude,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+        showsUserLocation
+        followsUserLocation
         style={{flex: 1, backgroundColor: 'steelblue'}}
-       >
-       <Marker
-             coordinate={{
-           latitude: 37.78825,
-           longitude: -122.4324,
-         }}
-             title={"Title"}
-             description={"Description"}
-           />
-       </MapView>
+      >
+        <Marker
+          coordinate={myLatLng}
+          title={"Title"}
+          description={"Description"}
+        />
+      </MapView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
 
 export default App;
